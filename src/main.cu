@@ -55,7 +55,7 @@ __global__ void CountEdges(
 		)
 {
 	uint tid = blockIdx.x * blockDim.x + threadIdx.x;
-	while (tid < dataLength - MerLength - 1)
+	while (tid < dataLength - MerLength)
 	{
 		ull hash = 0;
 		int i = 0;
@@ -120,6 +120,86 @@ int main(int argc, char ** argv)
 }
 
 
+template<int MerLenght, int HashLength>
+string indexToString(int index)
+{
+	string result = "";
+
+	for(int i = 0; i < HashLength; ++i)
+	{
+		switch(index & 3)
+		{
+		case 0:
+		{
+			result+="A";
+			break;
+		}
+		case 1:
+		{
+			result+="C";
+			break;
+		}
+		case 2:
+		{
+			result+="T";
+			break;
+		}
+		case 3:
+		{
+			result+="G";
+			break;
+		}
+		}
+	}
+	return result;
+}
+
+template<int MerLength, int HashLength>
+void PrintResultInternal(uint* tree, int index, string s, int i)
+{
+	if(i == MerLength)
+	{
+		if(tree[index]) cout << s << "A " << tree[index] << endl;
+		if(tree[index+1]) cout << s << "C " << tree[index + 1] << endl;
+		if(tree[index+2]) cout << s << "T " << tree[index + 2] << endl;
+		if(tree[index+3]) cout << s << "G " << tree[index + 3] << endl;
+	}
+	else
+	{
+		++i;
+		if(tree[index] != 0)
+		{
+			PrintResultInternal<MerLength, HashLength>(tree, tree[index], s+"A", i);
+		}
+		if(tree[index+1] != 0)
+		{
+			PrintResultInternal<MerLength, HashLength>(tree, tree[index+1], s+"C", i);
+		}
+		if(tree[index+2] != 0)
+		{
+			PrintResultInternal<MerLength, HashLength>(tree, tree[index+2], s+"T", i);
+		}
+		if(tree[index+3] != 0)
+		{
+			PrintResultInternal<MerLength, HashLength>(tree, tree[index+3], s+"G", i);
+		}
+
+	}
+}
+
+template<int MerLength, int HashLength>
+void PrintResult(uint* tree)
+{
+	const int size = 4 * (1 << (2*HashLength));
+	for(int i = 0; i < size; i+=4)
+	{
+		string s = indexToString<MerLength, HashLength>(i/4);
+
+		PrintResultInternal<MerLength, HashLength>(tree, i, s, HashLength);
+
+	}
+}
+
 template<int MerLength, int HashLength>
 void Init()
 {
@@ -131,7 +211,8 @@ void Init()
 
 
 	checkCudaErrors(cudaMalloc((void**)&data_d,  2048 * sizeof(char)));
-	checkCudaErrors(cudaMemset(data_d, 'A', 2048 * sizeof(char)));
+	checkCudaErrors(cudaMemset(data_d, 'G', 2048 * sizeof(char)));
+	checkCudaErrors(cudaMemset(data_d, 'C', 1024 * sizeof(char)));
 	checkCudaErrors(cudaMalloc((void**)&tree_d,  4*2048*sizeof(uint)));
 	checkCudaErrors(cudaMemset(tree_d, 0, 2048 * sizeof(uint)));
 	checkCudaErrors(cudaMalloc((void**)&treeLength_d,  sizeof(uint)));
@@ -148,6 +229,14 @@ void Init()
 		fprintf(stderr, "kernelAssert: %s\n", cudaGetErrorString(code));
 		if (abort) exit(code);
 	}
+
+	uint* tree_h = new uint[4*2048];
+
+	checkCudaErrors(cudaMemcpy((void*)tree_h, (void*)tree_d, 4*2048 * sizeof(uint), cudaMemcpyDeviceToHost));
+
+	PrintResult<MerLength, HashLength>(tree_h);
+
+	delete tree_h;
 
     checkCudaErrors(cudaFree(data_d));
     checkCudaErrors(cudaFree(tree_d));
