@@ -22,7 +22,7 @@
 
 
 
-__device__ int letterToInt(char c)
+__host__ __device__ int letterToInt(char c)
 {
 	switch(c)
 	{
@@ -61,7 +61,7 @@ __global__ void CountEdges(
 		int i = 0;
 		for(; i<HashLength; ++i)
 		{
-			hash += letterToInt(data[tid + i]) << 2 * i;
+			hash += letterToInt(data[tid + i]) << (2 * i);
 		}
 
 		uint currentNode = 4 * hash;
@@ -201,6 +201,37 @@ void PrintResult(uint* tree)
 }
 
 template<int MerLength, int HashLength>
+uint GetEdgeWeigthInternal(uint* tree, int index,string mer, int i)
+{
+	if(i == MerLength)
+	{
+		return tree[index + letterToInt(mer[i])];
+	}
+
+	int c = letterToInt(mer[i]);
+	if(tree[index + c] == 0) return 0;
+
+	return GetEdgeWeigthInternal<MerLength, HashLength>(tree, tree[index + c], mer, i+1);
+}
+
+template<int MerLength, int HashLength>
+uint GetEdgeWeight(uint* tree, string mer)
+{
+	if(mer.length() != MerLength+1)
+	{
+		return 0;
+	}
+
+	ull hash = 0;
+	for(int i=0; i < HashLength; ++i)
+	{
+		hash+=letterToInt(mer[i]) << (2 * i);
+	}
+
+	return GetEdgeWeigthInternal<MerLength, HashLength>(tree, 4 * hash, mer, HashLength);
+}
+
+template<int MerLength, int HashLength>
 void Init()
 {
 
@@ -213,6 +244,8 @@ void Init()
 	checkCudaErrors(cudaMalloc((void**)&data_d,  2048 * sizeof(char)));
 	checkCudaErrors(cudaMemset(data_d, 'G', 2048 * sizeof(char)));
 	checkCudaErrors(cudaMemset(data_d, 'C', 1024 * sizeof(char)));
+	checkCudaErrors(cudaMemset(data_d, 'T', 1023 * sizeof(char)));
+	checkCudaErrors(cudaMemset(data_d, 'A', 1022 * sizeof(char)));
 	checkCudaErrors(cudaMalloc((void**)&tree_d,  4*2048*sizeof(uint)));
 	checkCudaErrors(cudaMemset(tree_d, 0, 2048 * sizeof(uint)));
 	checkCudaErrors(cudaMalloc((void**)&treeLength_d,  sizeof(uint)));
@@ -235,7 +268,7 @@ void Init()
 	checkCudaErrors(cudaMemcpy((void*)tree_h, (void*)tree_d, 4*2048 * sizeof(uint), cudaMemcpyDeviceToHost));
 
 	PrintResult<MerLength, HashLength>(tree_h);
-
+	cout << GetEdgeWeight<MerLength, HashLength>(tree_h, "ATCG") << endl;
 	delete tree_h;
 
     checkCudaErrors(cudaFree(data_d));
