@@ -7,7 +7,7 @@
 #include <assert.h>
 #include <random>
 #include <float.h>
-#include "/home/bartek/cuda/nanopore/src/EdgeCounter.cuh"
+#include "EdgeCounter.cuh"
 
 #include <cuda_runtime.h>
 #include <cuda_profiler_api.h>
@@ -47,59 +47,21 @@ void Init();
 int main(int argc, char ** argv)
 {
 	EdgeCounter<5,3> ec;
-	char* line = new char[2300];
+	char* line = new char[5000];
 	memset(line, 'A', 2300);
 	ec.AddLine(line, 2300);
+	memset(line, 'C', 1900);
+	ec.AddLine(line, 1900);
+	memset(line, 'T', 3300);
+	ec.AddLine(line, 3300);
+
+	memset(line, 'G', 1000);
+	memset(line, 'C', 500);
+	ec.AddLine(line, 1500);
+
 	ec.Result();
 	ec.PrintResult();
+	cout << "GGGGG -> GGGGGT " << ec.GetEdgeWeight("GGGGGT") << endl;
+	delete line;
 }
-
-
-
-/*
-template<int MerLength, int HashLength>
-void Init()
-{
-
-	char* data_d;
-	uint dataLength_d;
-	uint* tree_d;
-	uint* treeLength_d;
-
-
-	checkCudaErrors(cudaMalloc((void**)&data_d,  2048 * sizeof(char)));
-	checkCudaErrors(cudaMemset(data_d, 'G', 2048 * sizeof(char)));
-	checkCudaErrors(cudaMemset(data_d, 'C', 1024 * sizeof(char)));
-	checkCudaErrors(cudaMemset(data_d, 'T', 1023 * sizeof(char)));
-	checkCudaErrors(cudaMemset(data_d, 'A', 1022 * sizeof(char)));
-	checkCudaErrors(cudaMalloc((void**)&tree_d,  4*2048*sizeof(uint)));
-	checkCudaErrors(cudaMemset(tree_d, 0, 2048 * sizeof(uint)));
-	checkCudaErrors(cudaMalloc((void**)&treeLength_d,  sizeof(uint)));
-	const uint startingTreeLength = 4 * (1 << (2*HashLength));
-	checkCudaErrors(cudaMemcpy(treeLength_d, &startingTreeLength, sizeof(uint), cudaMemcpyHostToDevice));
-
-
-
-	CountEdges<MerLength,HashLength,1><<<1, 256>>>(data_d, 2048, tree_d, treeLength_d);
-	cudaDeviceSynchronize();
-	cudaError_t code = cudaGetLastError();
-	if (code != cudaSuccess)
-	{
-		fprintf(stderr, "kernelAssert: %s\n", cudaGetErrorString(code));
-		if (abort) exit(code);
-	}
-
-	uint* tree_h = new uint[4*2048];
-
-	checkCudaErrors(cudaMemcpy((void*)tree_h, (void*)tree_d, 4*2048 * sizeof(uint), cudaMemcpyDeviceToHost));
-
-	PrintResult<MerLength, HashLength>(tree_h);
-	cout << GetEdgeWeight<MerLength, HashLength>(tree_h, "ATCG") << endl;
-	delete tree_h;
-
-    checkCudaErrors(cudaFree(data_d));
-    checkCudaErrors(cudaFree(tree_d));
-    checkCudaErrors(cudaFree(treeLength_d));
-}
-*/
 

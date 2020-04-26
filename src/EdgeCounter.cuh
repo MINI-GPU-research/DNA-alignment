@@ -133,7 +133,8 @@ public:
 			if(i - (MerLength - 1) > 0) i -= (MerLength - 1); // AAAA AAAA
 
 			int len = length - i > DATA_SIZE  ? DATA_SIZE : length - i;
-			checkCudaErrors(cudaMemset(data_d, 'G', 2048 * sizeof(char)));
+			checkCudaErrors(cudaMemcpy(data_d, line + i, len*sizeof(char), cudaMemcpyHostToDevice));
+
 
 			CountEdges<MerLength,HashLength><<<ceil(len/256), 256>>>(
 					data_d,
@@ -232,7 +233,7 @@ public:
 
 		}
 	}
-
+private:
 	uint GetEdgeWeigthInternal(uint* tree, int index,string mer, int i)
 	{
 		if(i == MerLength)
@@ -245,8 +246,8 @@ public:
 
 		return GetEdgeWeigthInternal(tree, tree[index + c], mer, i+1);
 	}
-
-	uint GetEdgeWeight(uint* tree, string mer)
+public:
+	uint GetEdgeWeight(string mer)
 	{
 		if(mer.length() != MerLength+1)
 		{
@@ -259,7 +260,7 @@ public:
 			hash+=letterToInt(mer[i]) << (2 * i);
 		}
 
-		return GetEdgeWeigthInternal(tree, 4 * hash, mer, HashLength);
+		return GetEdgeWeigthInternal(tree_h, 4 * hash, mer, HashLength);
 	}
 
 };
