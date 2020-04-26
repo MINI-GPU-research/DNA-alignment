@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <random>
 #include <float.h>
+#include "/home/bartek/cuda/nanopore/src/EdgeCounter.cuh"
 
 #include <cuda_runtime.h>
 #include <cuda_profiler_api.h>
@@ -22,78 +23,7 @@
 
 
 
-__host__ __device__ int letterToInt(char c)
-{
-	switch(c)
-	{
-		case 'A':
-		{
-			return 0;
-		}
-		case 'C':
-		{
-			return 1;
-		}
-		case 'T':
-		{
-			return 2;
-		}
-		case 'G':
-		{
-			return 3;
-		}
-	}
-	return -1;
-}
 
-template<int MerLength, int HashLength, int noBlocks>
-__global__ void CountEdges(
-		char* data,
-		uint dataLength,
-		uint* tree,
-		uint* treeLength
-		)
-{
-	uint tid = blockIdx.x * blockDim.x + threadIdx.x;
-	while (tid < dataLength - MerLength)
-	{
-		ull hash = 0;
-		int i = 0;
-		for(; i<HashLength; ++i)
-		{
-			hash += letterToInt(data[tid + i]) << (2 * i);
-		}
-
-		uint currentNode = 4 * hash;
-
-		while(i < MerLength)
-		{
-			int letterId = letterToInt(data[tid + i]);
-			int nextNode = tree[currentNode + letterId];
-
-			if (atomicCAS(tree + currentNode + letterId, 0, -1) == 0)
-			{
-				int newNode = atomicAdd(treeLength, 4);
-				tree[currentNode + letterId] = newNode;
-				currentNode = newNode;
-				++i;
-			}
-			else if (nextNode != -1 && nextNode != 0)
-			{
-				currentNode = nextNode;
-				++i;
-			}
-		}
-
-		int lastLetter = letterToInt(data[tid + i]);
-		if(lastLetter > -1)
-		{
-			atomicAdd(tree + currentNode + lastLetter, 1);
-		}
-
-		tid += blockDim.x * noBlocks;
-	}
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -116,121 +46,17 @@ void Init();
 
 int main(int argc, char ** argv)
 {
-	Init<3,1>();
+	EdgeCounter<5,3> ec;
+	char* line = new char[2300];
+	memset(line, 'A', 2300);
+	ec.AddLine(line, 2300);
+	ec.Result();
+	ec.PrintResult();
 }
 
 
-template<int MerLenght, int HashLength>
-string indexToString(int index)
-{
-	string result = "";
 
-	for(int i = 0; i < HashLength; ++i)
-	{
-		switch(index & 3)
-		{
-		case 0:
-		{
-			result+="A";
-			break;
-		}
-		case 1:
-		{
-			result+="C";
-			break;
-		}
-		case 2:
-		{
-			result+="T";
-			break;
-		}
-		case 3:
-		{
-			result+="G";
-			break;
-		}
-		}
-	}
-	return result;
-}
-
-template<int MerLength, int HashLength>
-void PrintResultInternal(uint* tree, int index, string s, int i)
-{
-	if(i == MerLength)
-	{
-		if(tree[index]) cout << s << "A " << tree[index] << endl;
-		if(tree[index+1]) cout << s << "C " << tree[index + 1] << endl;
-		if(tree[index+2]) cout << s << "T " << tree[index + 2] << endl;
-		if(tree[index+3]) cout << s << "G " << tree[index + 3] << endl;
-	}
-	else
-	{
-		++i;
-		if(tree[index] != 0)
-		{
-			PrintResultInternal<MerLength, HashLength>(tree, tree[index], s+"A", i);
-		}
-		if(tree[index+1] != 0)
-		{
-			PrintResultInternal<MerLength, HashLength>(tree, tree[index+1], s+"C", i);
-		}
-		if(tree[index+2] != 0)
-		{
-			PrintResultInternal<MerLength, HashLength>(tree, tree[index+2], s+"T", i);
-		}
-		if(tree[index+3] != 0)
-		{
-			PrintResultInternal<MerLength, HashLength>(tree, tree[index+3], s+"G", i);
-		}
-
-	}
-}
-
-template<int MerLength, int HashLength>
-void PrintResult(uint* tree)
-{
-	const int size = 4 * (1 << (2*HashLength));
-	for(int i = 0; i < size; i+=4)
-	{
-		string s = indexToString<MerLength, HashLength>(i/4);
-
-		PrintResultInternal<MerLength, HashLength>(tree, i, s, HashLength);
-
-	}
-}
-
-template<int MerLength, int HashLength>
-uint GetEdgeWeigthInternal(uint* tree, int index,string mer, int i)
-{
-	if(i == MerLength)
-	{
-		return tree[index + letterToInt(mer[i])];
-	}
-
-	int c = letterToInt(mer[i]);
-	if(tree[index + c] == 0) return 0;
-
-	return GetEdgeWeigthInternal<MerLength, HashLength>(tree, tree[index + c], mer, i+1);
-}
-
-template<int MerLength, int HashLength>
-uint GetEdgeWeight(uint* tree, string mer)
-{
-	if(mer.length() != MerLength+1)
-	{
-		return 0;
-	}
-
-	ull hash = 0;
-	for(int i=0; i < HashLength; ++i)
-	{
-		hash+=letterToInt(mer[i]) << (2 * i);
-	}
-
-	return GetEdgeWeigthInternal<MerLength, HashLength>(tree, 4 * hash, mer, HashLength);
-}
-
+/*
 template<int MerLength, int HashLength>
 void Init()
 {
@@ -275,4 +101,5 @@ void Init()
     checkCudaErrors(cudaFree(tree_d));
     checkCudaErrors(cudaFree(treeLength_d));
 }
+*/
 
