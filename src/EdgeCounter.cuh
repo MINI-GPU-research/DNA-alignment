@@ -17,6 +17,7 @@
 #include <cuda_profiler_api.h>
 #include <helper_cuda.h>
 #include <helper_functions.h>
+#include <cmath>
 
 
 #define uint unsigned int
@@ -50,7 +51,7 @@ __host__ __device__ int letterToInt(char c)
 	return -1;
 }
 
-template<int MerLength, int HashLength, int NoBlocks>
+template<int MerLength, int HashLength>
 __global__ void CountEdges(
 		char* data,
 		uint dataLength,
@@ -59,7 +60,7 @@ __global__ void CountEdges(
 		)
 {
 	uint tid = blockIdx.x * blockDim.x + threadIdx.x;
-	while (tid < dataLength - MerLength)
+	if (tid < dataLength - MerLength)
 	{
 		ull hash = 0;
 		int i = 0;
@@ -94,8 +95,6 @@ __global__ void CountEdges(
 		{
 			atomicAdd(tree + currentNode + lastLetter, 1);
 		}
-
-		tid += blockDim.x * NoBlocks;
 	}
 }
 
@@ -136,7 +135,7 @@ public:
 			int len = length - i > DATA_SIZE  ? DATA_SIZE : length - i;
 			checkCudaErrors(cudaMemset(data_d, 'G', 2048 * sizeof(char)));
 
-			CountEdges<MerLength,HashLength, 1><<<1, 256>>>(
+			CountEdges<MerLength,HashLength><<<ceil(len/256), 256>>>(
 					data_d,
 					len,
 					tree_d,
