@@ -52,7 +52,10 @@ int main(int argc, char ** argv)
 
 	while(!sfqr.Eof()){
 		std::string sequence = sfqr.ReadNextGenome();
-		ec.AddLine(sequence.c_str(),sequence.length());
+		char *line = new char[sequence.size()+1];
+		strcpy(line, sequence.c_str());
+		ec.AddLine(line,sequence.size());
+		delete line;
 	}
 
 //	char* line = new char[5000];

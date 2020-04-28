@@ -135,8 +135,7 @@ public:
 			int len = length - i > DATA_SIZE  ? DATA_SIZE : length - i;
 			checkCudaErrors(cudaMemcpy(data_d, line + i, len*sizeof(char), cudaMemcpyHostToDevice));
 
-
-			CountEdges<MerLength,HashLength><<<ceil(len/256), 256>>>(
+			CountEdges<MerLength,HashLength><<<ceil(static_cast<float>(len)/256), 256>>>(
 					data_d,
 					len,
 					tree_d,
