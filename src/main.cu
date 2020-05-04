@@ -47,32 +47,24 @@ void Init();
 
 int main(int argc, char ** argv)
 {
-	EdgeCounter<5,3> ec;
-	SimpleFastQReader sfqr ("/home/michal/cuda-workspace/Testing/Debug/sequence.fastq");
+	EdgeCounter<7,3,2> ec;
+//	SimpleFastQReader sfqr ("/home/michal/cuda-workspace/Testing/Debug/sequence.fastq");
 
-	while(!sfqr.Eof()){
+	/*while(!sfqr.Eof()){
 		std::string sequence = sfqr.ReadNextGenome();
 		char *line = new char[sequence.size()+1];
 		strcpy(line, sequence.c_str());
 		ec.AddLine(line,sequence.size());
 		delete line;
-	}
+	}*/
 
-//	char* line = new char[5000];
-//	memset(line, 'A', 2300);
-//	ec.AddLine(line, 2300);
-//	memset(line, 'C', 1900);
-//	ec.AddLine(line, 1900);
-//	memset(line, 'T', 3300);
-//	ec.AddLine(line, 3300);
-//
-//	memset(line, 'G', 1000);
-//	memset(line, 'C', 500);
-//	ec.AddLine(line, 1500);
+	char* line = new char[5000];
+	memset(line, 'A', 100);
+	line[7]='T';
+	ec.AddLine(line, 100);
 
-	ec.Result();
 	ec.PrintResult();
-	cout << "GGGGG -> GGGGGT " << ec.GetEdgeWeight("GGGGGT") << endl;
-//	delete line;
+//	cout << "GGGGG -> GGGGGT " << ec.GetEdgeWeight("GGGGGT") << endl;
+	delete line;
 }
 
