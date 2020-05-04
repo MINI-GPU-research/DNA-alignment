@@ -97,7 +97,7 @@ __global__ void CountEdges(
 		}
 	}
 }
-
+#define DEVICE_TREE_SIZE 1024*1024*256
 template<int MerLength, int HashLength>
 class EdgeCounter
 {
@@ -110,9 +110,9 @@ public:
 	EdgeCounter()
 	{
 		checkCudaErrors(cudaMalloc((void**)&data_d,  DATA_SIZE * sizeof(char)));
-		checkCudaErrors(cudaMalloc((void**)&tree_d,  4*2048*sizeof(uint)));
-		tree_h = new uint[4*2048];
-		checkCudaErrors(cudaMemset(tree_d, 0, 2048 * sizeof(uint)));
+		checkCudaErrors(cudaMalloc((void**)&tree_d,  DEVICE_TREE_SIZE*sizeof(uint)));
+		tree_h = new uint[DEVICE_TREE_SIZE];
+		checkCudaErrors(cudaMemset(tree_d, 0, DEVICE_TREE_SIZE * sizeof(uint)));
 		checkCudaErrors(cudaMalloc((void**)&treeLength_d,  sizeof(uint)));
 		const uint startingTreeLength = 4 * (1 << (2*HashLength));
 		checkCudaErrors(cudaMemcpy(treeLength_d, &startingTreeLength, sizeof(uint), cudaMemcpyHostToDevice));
@@ -153,7 +153,7 @@ public:
 
 	void Result()
 	{
-		checkCudaErrors(cudaMemcpy((void*)tree_h, (void*)tree_d, 4*2048 * sizeof(uint), cudaMemcpyDeviceToHost));
+		checkCudaErrors(cudaMemcpy((void*)tree_h, (void*)tree_d, DEVICE_TREE_SIZE * sizeof(uint), cudaMemcpyDeviceToHost));
 	}
 
 	string indexToString(int index)
@@ -162,26 +162,31 @@ public:
 
 		for(int i = 0; i < HashLength; ++i)
 		{
-			switch(index & 3)
+			switch((index >> (2*i)) & 3 )
 			{
 			case 0:
 			{
-				result+="A";
+				result ="A" + result;
 				break;
 			}
 			case 1:
 			{
-				result+="C";
+				result = "C" + result;
 				break;
 			}
 			case 2:
 			{
-				result+="T";
+				result = "T" + result;
 				break;
 			}
 			case 3:
 			{
-				result+="G";
+				result = "G" + result;
+				break;
+			}
+			default:
+			{
+				result = "?" + result;
 				break;
 			}
 			}
