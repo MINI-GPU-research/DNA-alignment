@@ -22,7 +22,7 @@
 
 #define uint unsigned int
 #define ull unsigned long long
-#define DATA_SIZE 2048
+#define DATA_SIZE 4096
 
 using namespace std;
 
@@ -108,7 +108,7 @@ __global__ void CountEdges(
 		__syncthreads();
 	}
 }
-#define DEVICE_TREE_SIZE 1024*1024*4
+#define DEVICE_TREE_SIZE 1024*1024*128-1
 template<int MerLength, int HashLength, int FirstLetters>
 class EdgeCounter
 {
@@ -119,6 +119,8 @@ public:
 
 	uint* tree_h;
 	uint* treeLength_h;
+
+	int currentDeviceTree;
 
 	EdgeCounter()
 	{
@@ -139,6 +141,7 @@ public:
 		{
 			tree_h[i]=0;
 		}
+		currentDeviceTree = 0;
 	}
 
 	~EdgeCounter()
@@ -147,6 +150,42 @@ public:
 	    checkCudaErrors(cudaFree(tree_d));
 	    checkCudaErrors(cudaFree(treeLength_d));
 	    delete tree_h;
+	}
+
+
+	void AddLineFirstLetters(char* line, uint length, int fl)
+	{
+		if(currentDeviceTree != fl)
+		{
+			checkCudaErrors(cudaMemcpy((void*)(tree_h + (currentDeviceTree * DEVICE_TREE_SIZE)), (void*)tree_d, DEVICE_TREE_SIZE * sizeof(uint), cudaMemcpyDeviceToHost));
+			checkCudaErrors(cudaMemcpy((void*)(treeLength_h + currentDeviceTree), (void*)treeLength_d, sizeof(uint), cudaMemcpyDeviceToHost));
+			checkCudaErrors(cudaMemcpy(treeLength_d, treeLength_h + fl, sizeof(uint), cudaMemcpyHostToDevice));
+			checkCudaErrors(cudaMemcpy(tree_d, (tree_h + (fl * DEVICE_TREE_SIZE)) , DEVICE_TREE_SIZE*sizeof(uint), cudaMemcpyHostToDevice));
+			currentDeviceTree = fl;
+		}
+
+		for(int i = 0; i < length; i+=DATA_SIZE)
+		{
+			if(i - ((MerLength + FirstLetters) - 1) > 0) i -= ((MerLength + FirstLetters) - 1); // AAAA AAAA
+
+			int len = length - i > DATA_SIZE  ? DATA_SIZE : length - i;
+			checkCudaErrors(cudaMemcpy(data_d, line + i, len*sizeof(char), cudaMemcpyHostToDevice));
+
+			CountEdges<MerLength,HashLength,FirstLetters><<<ceil(static_cast<float>(len)/256), 256>>>(
+					data_d,
+					len,
+					tree_d,
+					treeLength_d,
+					fl);
+
+			cudaDeviceSynchronize();
+			cudaError_t code = cudaGetLastError();
+			if (code != cudaSuccess)
+			{
+				fprintf(stderr, "kernelAssert: %s\n", cudaGetErrorString(code));
+				if (abort) exit(code);
+			}
+		}
 	}
 
 	void AddLine(char* line, uint length)
@@ -185,7 +224,8 @@ public:
 
 	void Result()
 	{
-		checkCudaErrors(cudaMemcpy((void*)tree_h, (void*)tree_d, DEVICE_TREE_SIZE * sizeof(uint), cudaMemcpyDeviceToHost));
+		checkCudaErrors(cudaMemcpy((void*)(tree_h + (currentDeviceTree * DEVICE_TREE_SIZE)), (void*)tree_d, DEVICE_TREE_SIZE * sizeof(uint), cudaMemcpyDeviceToHost));
+		checkCudaErrors(cudaMemcpy((void*)(treeLength_h + currentDeviceTree), (void*)treeLength_d, sizeof(uint), cudaMemcpyDeviceToHost));
 	}
 
 	string indexToString(int index, int no)
@@ -225,15 +265,17 @@ public:
 		}
 		return result;
 	}
+	uint indexxx = 0;
 private:
 	void PrintResultInternal(uint* tree, int index, string s, int i)
 	{
 		if(i == (MerLength - FirstLetters))
 		{
-			if(tree[index]) cout << s << "A " << tree[index] << endl;
+			/*if(tree[index]) cout << s << "A " << tree[index] << endl;
 			if(tree[index+1]) cout << s << "C " << tree[index + 1] << endl;
 			if(tree[index+2]) cout << s << "T " << tree[index + 2] << endl;
-			if(tree[index+3]) cout << s << "G " << tree[index + 3] << endl;
+			if(tree[index+3]) cout << s << "G " << tree[index + 3] << endl;*/
+			indexxx++;
 		}
 		else
 		{
@@ -272,6 +314,7 @@ public:
 				PrintResultInternal(tree_h + (fl * DEVICE_TREE_SIZE), i, ss + s, HashLength);
 			}
 		}
+		cout << indexxx << endl;
 	}
 private:
 	uint GetEdgeWeigthInternal(uint* tree, int index,string mer, int i)
