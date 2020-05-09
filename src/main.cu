@@ -47,15 +47,15 @@ void Init();
 
 int main(int argc, char ** argv)
 {
-	EdgeCounter<15,8,2> ec;
-	for(int i=0; i < (1 << (2*2)); ++i)
+	EdgeCounter<20,8,8> ec;
+	for(int i=0; i < (1 << (2*8)); ++i)
 	{
-		SimpleFastQReader sfqr ("/home/bartek/Downloads/chr100mb.fastq");
+		SimpleFastQReader sfqr ("/home/michal/chr1.fastq");
 
-		int line = 0;
+		int line_ = 0;
 		while(!sfqr.Eof()){
 			std::string sequence = sfqr.ReadNextGenome();
-			cout << line++ << endl;
+			cout << line_++ << endl;
 			char *line = new char[sequence.size()+1];
 			strcpy(line, sequence.c_str());
 			ec.AddLineFirstLetters(line,sequence.size(), i);

@@ -18,6 +18,7 @@
 #include <helper_cuda.h>
 #include <helper_functions.h>
 #include <cmath>
+#include <fstream>
 
 
 #define uint unsigned int
@@ -46,6 +47,10 @@ __host__ __device__ int letterToInt(char c)
 		case 'G':
 		{
 			return 3;
+		}
+		default :
+		{
+			return 0;
 		}
 	}
 	return -1;
@@ -108,6 +113,15 @@ __global__ void CountEdges(
 		__syncthreads();
 	}
 }
+
+void DumpDataToDisk(unsigned int* data, unsigned int data_len, int fl){
+	std::string name =  "/home/michal/data/part";
+	name+= to_string(fl);
+	auto myfile = std::fstream(name.c_str(), std::ios::out | std::ios::binary);
+	myfile.write((char*)&data[0], data_len);
+	myfile.close();
+}
+
 #define DEVICE_TREE_SIZE 1024*1024*128-1
 template<int MerLength, int HashLength, int FirstLetters>
 class EdgeCounter
@@ -122,22 +136,23 @@ public:
 
 	int currentDeviceTree;
 
+	const uint startingTreeLength = 4 * (1 << (2*HashLength));
+
 	EdgeCounter()
 	{
 		checkCudaErrors(cudaMalloc((void**)&data_d,  DATA_SIZE * sizeof(char)));
 		checkCudaErrors(cudaMalloc((void**)&tree_d,  DEVICE_TREE_SIZE*sizeof(uint)));
-		tree_h = new uint[(1 << (2 * FirstLetters)) * DEVICE_TREE_SIZE];
-		treeLength_h = new uint[(1 << (2 * FirstLetters))];
+		tree_h = new uint[DEVICE_TREE_SIZE];
+		treeLength_h = new uint[1];
 		checkCudaErrors(cudaMemset(tree_d, 0, DEVICE_TREE_SIZE * sizeof(uint)));
 		checkCudaErrors(cudaMalloc((void**)&treeLength_d,  sizeof(uint)));
-		const uint startingTreeLength = 4 * (1 << (2*HashLength));
 		checkCudaErrors(cudaMemcpy(treeLength_d, &startingTreeLength, sizeof(uint), cudaMemcpyHostToDevice));
 
-		for(int i = 0; i < (1 << (2 * FirstLetters)); ++i)
-		{
-			treeLength_h[i] = startingTreeLength;
-		}
-		for(int i = 0; i < ((1 << (2 * FirstLetters)) * DEVICE_TREE_SIZE); ++i)
+		//for(int i = 0; i < (1 << (2 * FirstLetters)); ++i)
+		//{
+			*treeLength_h = startingTreeLength;
+		//}
+		for(int i = 0; i <  DEVICE_TREE_SIZE; ++i)
 		{
 			tree_h[i]=0;
 		}
@@ -146,6 +161,8 @@ public:
 
 	~EdgeCounter()
 	{
+
+		DumpDataToDisk(tree_h,*(treeLength_h),currentDeviceTree);
 	    checkCudaErrors(cudaFree(data_d));
 	    checkCudaErrors(cudaFree(tree_d));
 	    checkCudaErrors(cudaFree(treeLength_d));
@@ -157,10 +174,17 @@ public:
 	{
 		if(currentDeviceTree != fl)
 		{
-			checkCudaErrors(cudaMemcpy((void*)(tree_h + (currentDeviceTree * DEVICE_TREE_SIZE)), (void*)tree_d, DEVICE_TREE_SIZE * sizeof(uint), cudaMemcpyDeviceToHost));
-			checkCudaErrors(cudaMemcpy((void*)(treeLength_h + currentDeviceTree), (void*)treeLength_d, sizeof(uint), cudaMemcpyDeviceToHost));
-			checkCudaErrors(cudaMemcpy(treeLength_d, treeLength_h + fl, sizeof(uint), cudaMemcpyHostToDevice));
-			checkCudaErrors(cudaMemcpy(tree_d, (tree_h + (fl * DEVICE_TREE_SIZE)) , DEVICE_TREE_SIZE*sizeof(uint), cudaMemcpyHostToDevice));
+			checkCudaErrors(cudaMemcpy((void*)(tree_h), (void*)tree_d, DEVICE_TREE_SIZE * sizeof(uint), cudaMemcpyDeviceToHost));
+			checkCudaErrors(cudaMemcpy((void*)(treeLength_h), (void*)treeLength_d, sizeof(uint), cudaMemcpyDeviceToHost));
+
+			DumpDataToDisk(tree_h,*(treeLength_h),currentDeviceTree);
+			*((uint*)treeLength_h) = startingTreeLength;
+			for(int i=0 ;i<DEVICE_TREE_SIZE;++i){
+				tree_h[i] = 0;
+			}
+
+			checkCudaErrors(cudaMemcpy(treeLength_d, treeLength_h, sizeof(uint), cudaMemcpyHostToDevice));
+			checkCudaErrors(cudaMemcpy(tree_d, (tree_h) , DEVICE_TREE_SIZE*sizeof(uint), cudaMemcpyHostToDevice));
 			currentDeviceTree = fl;
 		}
 
@@ -224,8 +248,8 @@ public:
 
 	void Result()
 	{
-		checkCudaErrors(cudaMemcpy((void*)(tree_h + (currentDeviceTree * DEVICE_TREE_SIZE)), (void*)tree_d, DEVICE_TREE_SIZE * sizeof(uint), cudaMemcpyDeviceToHost));
-		checkCudaErrors(cudaMemcpy((void*)(treeLength_h + currentDeviceTree), (void*)treeLength_d, sizeof(uint), cudaMemcpyDeviceToHost));
+		checkCudaErrors(cudaMemcpy((void*)(tree_h), (void*)tree_d, DEVICE_TREE_SIZE * sizeof(uint), cudaMemcpyDeviceToHost));
+		checkCudaErrors(cudaMemcpy((void*)(treeLength_h), (void*)treeLength_d, sizeof(uint), cudaMemcpyDeviceToHost));
 	}
 
 	string indexToString(int index, int no)
