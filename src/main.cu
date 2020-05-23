@@ -51,9 +51,14 @@ using namespace std;
 template<int prefixLen>
 void Test(string s, uint* tree_h, uint* treeLength_h)
 {
+<<<<<<< HEAD
 	EdgeCounter<12 + prefixLen,6,1,prefixLen> ec(s, tree_h, treeLength_h);
 	cout << prefixLen << endl;
 	for(int i=0; i < (1 << (1*2)); ++i)
+=======
+	EdgeCounter<16,8,2> ec;
+	for(int i=0; i < (1 << (2*2)); ++i)
+>>>>>>> 317cbb9... Misc
 	{
 		SimpleFastQReader sfqr ("/home/bartek/Downloads/chr1.fastq");
 
