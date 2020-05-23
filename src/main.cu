@@ -47,7 +47,7 @@ void Init();
 
 int main(int argc, char ** argv)
 {
-	EdgeCounter<15,8,2> ec;
+	EdgeCounter<16,8,2> ec;
 	for(int i=0; i < (1 << (2*2)); ++i)
 	{
 		SimpleFastQReader sfqr ("/home/bartek/Downloads/chr100mb.fastq");
