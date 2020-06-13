@@ -47,29 +47,53 @@ void Init();
 
 int main(int argc, char ** argv)
 {
+	if(argc < 2) {
+		std::cout<<"No path to file, please provide one"<<std::endl;
+		return 2;
+	}
 	EdgeCounter<16,8,2> ec;
-	for(int i=0; i < (1 << (2*2)); ++i)
-	{
-		SimpleFastQReader sfqr ("/home/bartek/Downloads/chr100mb.fastq");
-
-		int line = 0;
+	if(argc == 3) {
+		std::cout<<"Caching of the file to RAM, considerably faster, but uses way more RAM \n";
+		std::cout<<"Please use only if you have more free RAM than the size of processed file";
+		std::vector<std::string> catched_file;
+		SimpleFastQReader sfqr (argv[1]);
 		while(!sfqr.Eof()){
-			std::string sequence = sfqr.ReadNextGenome();
-			cout << line++ << endl;
-			char *line = new char[sequence.size()+1];
-			strcpy(line, sequence.c_str());
-			ec.AddLineFirstLetters(line,sequence.size(), i);
-			delete line;
+			catched_file.push_back(sfqr.ReadNextGenome());
 		}
+		for(int i=0; i < (1 << (2*2)); ++i)
+		{
+			SimpleFastQReader sfqr (argv[1]);
+			for (auto it = catched_file.begin(); it != catched_file.end(); it++)
+			{
+				std::string sequence = *it;
+				char *line = new char[sequence.size()+1];
+				strcpy(line, sequence.c_str());
+				ec.AddLineFirstLetters(line,sequence.size(), i);
+				delete line;
+			}
+		}
+		ec.Result();
+		ec.PrintResult();
+	}
+	else {
+		std::cout<<"No caching of the file to RAM, considerably slower, but uses way less RAM";
+		for(int i=0; i < (1 << (2*2)); ++i)
+		{
+			SimpleFastQReader sfqr (argv[1]);
+
+			int line = 0;
+			while(!sfqr.Eof()){
+				std::string sequence = sfqr.ReadNextGenome();
+				char *line = new char[sequence.size()+1];
+				strcpy(line, sequence.c_str());
+				ec.AddLineFirstLetters(line,sequence.size(), i);
+				delete line;
+			}
+		}
+		ec.Result();
+		ec.PrintResult();
 	}
 
-	/*char* line = new char[5000];
-	memset(line, 'A', 100);
-	line[7]='T';
-	ec.AddLine(line, 100);*/
-	ec.Result();
-	ec.PrintResult();
-//	cout << "GGGGG -> GGGGGT " << ec.GetEdgeWeight("GGGGGT") << endl;
-	//delete line;
+
 }
 
