@@ -51,13 +51,14 @@ __host__ __device__ int letterToInt(char c)
 	return -1;
 }
 
-template<int MerLength, int HashLength, int FirstLettersCut>
+template<int MerLength, int HashLength, int FirstLettersCut, int FirstLettersRestrictionLength>
 __global__ void CountEdges(
 		char* data,
 		uint dataLength,
 		uint* tree,
 		uint* treeLength,
-		uint startingLetters
+		uint startingLetters,
+		long long int firstLettersRestriction
 		)
 {
 	uint tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -65,7 +66,16 @@ __global__ void CountEdges(
 	{
 		ull hash = 0;
 		int i = 0;
-		for(; i < FirstLettersCut; ++i)
+		for(; i < FirstLettersRestrictionLength; ++i)
+		{
+			if ((firstLettersRestriction & 3) != letterToInt(data[tid + i]))
+			{
+				return;
+			}
+
+			firstLettersRestriction = firstLettersRestriction >> 2;
+		}
+		for(; i < FirstLettersCut+FirstLettersRestrictionLength; ++i)
 		{
 			if ((startingLetters & 3) != letterToInt(data[tid + i]))
 			{
@@ -74,9 +84,9 @@ __global__ void CountEdges(
 
 			startingLetters = startingLetters >> 2;
 		}
-		for(; i<(HashLength + FirstLettersCut); ++i)
+		for(; i<(HashLength + FirstLettersCut + FirstLettersRestrictionLength); ++i)
 		{
-			hash += letterToInt(data[tid + i]) << (2 * (i - FirstLettersCut));
+			hash += letterToInt(data[tid + i]) << (2 * (i - FirstLettersCut - FirstLettersRestrictionLength));
 		}
 
 		uint currentNode = 4 * hash;
@@ -109,7 +119,7 @@ __global__ void CountEdges(
 	}
 }
 #define DEVICE_TREE_SIZE 1024*1024*128-1
-template<int MerLength, int HashLength, int FirstLetters>
+template<int MerLength, int HashLength, int FirstLetters, int FirstLettersRestrictionLength>
 class EdgeCounter
 {
 public:
@@ -122,12 +132,14 @@ public:
 
 	int currentDeviceTree;
 
-	EdgeCounter()
+	long long int letterRestriction_h = 0;
+
+	EdgeCounter(string lettersRestrictions, uint* tree, uint* treeLen)
 	{
 		checkCudaErrors(cudaMalloc((void**)&data_d,  DATA_SIZE * sizeof(char)));
 		checkCudaErrors(cudaMalloc((void**)&tree_d,  DEVICE_TREE_SIZE*sizeof(uint)));
-		tree_h = new uint[(1 << (2 * FirstLetters)) * DEVICE_TREE_SIZE];
-		treeLength_h = new uint[(1 << (2 * FirstLetters))];
+		tree_h = tree;
+		treeLength_h = treeLen;
 		checkCudaErrors(cudaMemset(tree_d, 0, DEVICE_TREE_SIZE * sizeof(uint)));
 		checkCudaErrors(cudaMalloc((void**)&treeLength_d,  sizeof(uint)));
 		const uint startingTreeLength = 4 * (1 << (2*HashLength));
@@ -141,6 +153,11 @@ public:
 		{
 			tree_h[i]=0;
 		}
+
+		for(int i = 0; i < FirstLettersRestrictionLength; ++i)
+		{
+			letterRestriction_h += letterToInt(lettersRestrictions[i]) << (2*i);
+		}
 		currentDeviceTree = 0;
 	}
 
@@ -149,7 +166,6 @@ public:
 	    checkCudaErrors(cudaFree(data_d));
 	    checkCudaErrors(cudaFree(tree_d));
 	    checkCudaErrors(cudaFree(treeLength_d));
-	    delete tree_h;
 	}
 
 
@@ -171,12 +187,13 @@ public:
 			int len = length - i > DATA_SIZE  ? DATA_SIZE : length - i;
 			checkCudaErrors(cudaMemcpy(data_d, line + i, len*sizeof(char), cudaMemcpyHostToDevice));
 
-			CountEdges<MerLength,HashLength,FirstLetters><<<ceil(static_cast<float>(len)/256), 256>>>(
+			CountEdges<MerLength,HashLength,FirstLetters,FirstLettersRestrictionLength><<<ceil(static_cast<float>(len)/256), 256>>>(
 					data_d,
 					len,
 					tree_d,
 					treeLength_d,
-					fl);
+					fl,
+					letterRestriction_h);
 
 			cudaDeviceSynchronize();
 			cudaError_t code = cudaGetLastError();
@@ -185,40 +202,6 @@ public:
 				fprintf(stderr, "kernelAssert: %s\n", cudaGetErrorString(code));
 				if (abort) exit(code);
 			}
-		}
-	}
-
-	void AddLine(char* line, uint length)
-	{
-		for(int fl = 0; fl < (1 << (2 * FirstLetters)); ++fl)
-		{
-			checkCudaErrors(cudaMemcpy(treeLength_d, treeLength_h + fl, sizeof(uint), cudaMemcpyHostToDevice));
-			checkCudaErrors(cudaMemcpy(tree_d, (tree_h + (fl * DEVICE_TREE_SIZE)) , DEVICE_TREE_SIZE*sizeof(uint), cudaMemcpyHostToDevice));
-			for(int i = 0; i < length; i+=DATA_SIZE)
-			{
-				if(i - ((MerLength + FirstLetters) - 1) > 0) i -= ((MerLength + FirstLetters) - 1); // AAAA AAAA
-
-				int len = length - i > DATA_SIZE  ? DATA_SIZE : length - i;
-				checkCudaErrors(cudaMemcpy(data_d, line + i, len*sizeof(char), cudaMemcpyHostToDevice));
-
-				CountEdges<MerLength,HashLength,FirstLetters><<<ceil(static_cast<float>(len)/256), 256>>>(
-						data_d,
-						len,
-						tree_d,
-						treeLength_d,
-						fl);
-
-				cudaDeviceSynchronize();
-				cudaError_t code = cudaGetLastError();
-				if (code != cudaSuccess)
-				{
-					fprintf(stderr, "kernelAssert: %s\n", cudaGetErrorString(code));
-					if (abort) exit(code);
-				}
-			}
-
-			checkCudaErrors(cudaMemcpy((void*)(tree_h + (fl * DEVICE_TREE_SIZE)), (void*)tree_d, DEVICE_TREE_SIZE * sizeof(uint), cudaMemcpyDeviceToHost));
-			checkCudaErrors(cudaMemcpy((void*)(treeLength_h + fl), (void*)treeLength_d, sizeof(uint), cudaMemcpyDeviceToHost));
 		}
 	}
 
@@ -265,17 +248,40 @@ public:
 		}
 		return result;
 	}
-	uint indexxx = 0;
+	uint edgesCount = 0;
+	uint maximumEdgeWeight = 0;
+	uint cumulativeEdgeWeighht = 0;
+	uint existingNodes = 0;
 private:
-	void PrintResultInternal(uint* tree, int index, string s, int i)
+	void PrintResultInternal(uint* tree, int index, string s, int i, bool print = false)
 	{
-		if(i == (MerLength - FirstLetters))
+		if(i == (MerLength - FirstLetters - FirstLettersRestrictionLength))
 		{
-			/*if(tree[index]) cout << s << "A " << tree[index] << endl;
-			if(tree[index+1]) cout << s << "C " << tree[index + 1] << endl;
-			if(tree[index+2]) cout << s << "T " << tree[index + 2] << endl;
-			if(tree[index+3]) cout << s << "G " << tree[index + 3] << endl;*/
-			indexxx++;
+			if(tree[index] || tree[index + 1] || tree[index + 2] || tree[index+3]) existingNodes+=1;
+			if(tree[index]) {
+				if(print) cout << s << "A " << tree[index] << endl;
+				++edgesCount;
+				if(tree[index] > maximumEdgeWeight) maximumEdgeWeight = tree[index];
+				cumulativeEdgeWeighht += tree[index];
+			}
+			if(tree[index+1]) {
+				if(print) cout << s << "C " << tree[index + 1] << endl;
+				++edgesCount;
+				if(tree[index + 1] > maximumEdgeWeight) maximumEdgeWeight = tree[index + 1];
+				cumulativeEdgeWeighht += tree[index + 1];
+			}
+			if(tree[index+2]) {
+				if(print) cout << s << "T " << tree[index + 2] << endl;
+				++edgesCount;
+				if(tree[index + 2] > maximumEdgeWeight) maximumEdgeWeight = tree[index + 2];
+				cumulativeEdgeWeighht += tree[index + 2];
+			}
+			if(tree[index+3]) {
+				if(print) cout << s << "G " << tree[index + 3] << endl;
+				++edgesCount;
+				if(tree[index + 3] > maximumEdgeWeight) maximumEdgeWeight = tree[index + 3];
+				cumulativeEdgeWeighht += tree[index + 3];
+			}
 		}
 		else
 		{
@@ -301,7 +307,7 @@ private:
 	}
 
 public:
-	void PrintResult()
+	void PrintResult(bool printAllEdges = false)
 	{
 		for(int fl = 0; fl < (1 << (2 * FirstLetters)); ++fl)
 		{
@@ -311,15 +317,23 @@ public:
 			{
 				string s = indexToString(i/4, HashLength);
 
-				PrintResultInternal(tree_h + (fl * DEVICE_TREE_SIZE), i, ss + s, HashLength);
+				PrintResultInternal(tree_h + (fl * DEVICE_TREE_SIZE), i, ss + s, HashLength,printAllEdges);
 			}
 		}
-		cout << indexxx << endl;
+		uint sumLength = 0;
+		for(int fl = 0; fl < (1 << (2 * FirstLetters)); ++fl)
+		{
+			sumLength += treeLength_h[fl];
+		}
+		cout << "avg edge weight:" << (double)cumulativeEdgeWeighht/edgesCount << endl;
+		cout << "maximumEdgeWeight" << maximumEdgeWeight << endl;
+		cout << "edges count:    " << edgesCount << endl;
+		cout << "edges %:        " << (double)edgesCount / pow(4, (1 + MerLength - FirstLettersRestrictionLength)) << endl;
 	}
 private:
 	uint GetEdgeWeigthInternal(uint* tree, int index,string mer, int i)
 	{
-		if(i == MerLength)
+		if(i == (MerLength - FirstLettersRestrictionLength))
 		{
 			return tree[index + letterToInt(mer[i])];
 		}

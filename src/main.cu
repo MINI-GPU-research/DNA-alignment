@@ -44,18 +44,21 @@ void usage(char* pname){
 template<int MerLength, int HashLength>
 void Init();
 
+using namespace std;
+#define FirstLetters 1
+#define DEVICE_TREE_SIZE 1024*1024*128-1
 
-int main(int argc, char ** argv)
+template<int prefixLen>
+void Test(string s, uint* tree_h, uint* treeLength_h)
 {
-	EdgeCounter<16,8,2> ec;
-	for(int i=0; i < (1 << (2*2)); ++i)
+	EdgeCounter<12 + prefixLen,6,1,prefixLen> ec(s, tree_h, treeLength_h);
+	cout << prefixLen << endl;
+	for(int i=0; i < (1 << (1*2)); ++i)
 	{
-		SimpleFastQReader sfqr ("/home/bartek/Downloads/chr100mb.fastq");
+		SimpleFastQReader sfqr ("/home/bartek/Downloads/chr1.fastq");
 
-		int line = 0;
 		while(!sfqr.Eof()){
 			std::string sequence = sfqr.ReadNextGenome();
-			cout << line++ << endl;
 			char *line = new char[sequence.size()+1];
 			strcpy(line, sequence.c_str());
 			ec.AddLineFirstLetters(line,sequence.size(), i);
@@ -63,13 +66,44 @@ int main(int argc, char ** argv)
 		}
 	}
 
-	/*char* line = new char[5000];
-	memset(line, 'A', 100);
-	line[7]='T';
-	ec.AddLine(line, 100);*/
 	ec.Result();
 	ec.PrintResult();
-//	cout << "GGGGG -> GGGGGT " << ec.GetEdgeWeight("GGGGGT") << endl;
-	//delete line;
+}
+
+int main(int argc, char ** argv)
+{
+	string s = "ACATATATGATAGACAATGACATAGACAGATACCGAGATAGACAGATAGACCAGACTGCTAGACTAGACCATGAGAGACTTAGACAGATATAGACCATATTTAGAGAG";
+	uint* tree_h = new uint[(1 << (2 * FirstLetters)) * DEVICE_TREE_SIZE];
+	uint* treeLength_h = new uint[(1 << (2 * FirstLetters))];
+	Test<0>(s, tree_h,treeLength_h);
+	Test<1>(s, tree_h,treeLength_h);
+	Test<2>(s, tree_h,treeLength_h);
+	Test<3>(s, tree_h,treeLength_h);
+	Test<4>(s, tree_h,treeLength_h);
+	Test<5>(s, tree_h,treeLength_h);
+	Test<6>(s, tree_h,treeLength_h);
+	Test<7>(s, tree_h,treeLength_h);
+	Test<8>(s, tree_h,treeLength_h);
+	Test<9>(s, tree_h,treeLength_h);
+	Test<10>(s, tree_h,treeLength_h);
+	Test<11>(s, tree_h,treeLength_h);
+	Test<12>(s, tree_h,treeLength_h);
+	Test<13>(s, tree_h,treeLength_h);
+	Test<14>(s, tree_h,treeLength_h);
+	Test<15>(s, tree_h,treeLength_h);
+	Test<16>(s, tree_h,treeLength_h);
+	Test<17>(s, tree_h,treeLength_h);
+	Test<18>(s, tree_h,treeLength_h);
+	Test<19>(s, tree_h,treeLength_h);
+	Test<20>(s, tree_h,treeLength_h);
+	Test<21>(s, tree_h,treeLength_h);
+	Test<22>(s, tree_h,treeLength_h);
+	Test<23>(s, tree_h,treeLength_h);
+	Test<24>(s, tree_h,treeLength_h);
+	Test<25>(s, tree_h,treeLength_h);
+	Test<26>(s, tree_h,treeLength_h);
+
+	delete[] tree_h;
+	delete[] treeLength_h;
 }
 
